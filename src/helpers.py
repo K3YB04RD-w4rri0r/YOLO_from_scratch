@@ -47,7 +47,6 @@ def IoU(b1 : torch.Tensor, b2 : torch.Tensor):
 
     return I / (A1 + A2 - I + 1e-6)
 
-
 def single_class_nms(boxes : torch.Tensor, scores : torch.Tensor, thresh : float) -> torch.Tensor:
     order = torch.argsort(scores, descending=True)
     out = []
@@ -59,60 +58,26 @@ def single_class_nms(boxes : torch.Tensor, scores : torch.Tensor, thresh : float
 
     return torch.stack(out)
 
-       
-def single_class_nms(boxes : torch.Tensor, scores : torch.Tensor, thresh : float) -> torch.Tensor:
-    idxs = torch.argsort(scores, descending=True).tolist()
-    keep = []
-
-    while len(idxs) > 0:
-        current = idxs.pop(0)
-        keep.append(current)
-        idxs = idxs[IoU(boxes[current], boxes[idxs]) < thresh]
-
-    return torch.tensor(keep, dtype=torch.long)
-
 
 def multiple_class_nms(boxes : torch.Tensor, classes : torch.Tensor, scores : torch.Tensor, thresh : float) -> torch.Tensor:
-    # boxes -> (B, 4)
-    # classes -> (B,)
-    # scores -> (B,)
-    unique_cls = torch.unique(classes)
-    class_nms = []
-    for c in unique_cls:
-        mask = (classes == c)
-
-        class_boxes     = boxes[mask]
-        class_scores    = scores[mask]
-
-        global_idx  = torch.nonzero(mask).squeeze(-1)
-        class_elts  = single_class_nms(class_boxes, class_scores, thresh)
-        class_nms.append(global_idx[class_elts])
-    return torch.cat(class_nms)
-
+    diff_classes = torch.unique(classes)
+    fin = []
+    for c in diff_classes:
+        class_mask = (classes == c)
+        class_boxes = boxes[class_mask]
+        class_scores = scores[class_mask]
+        class_subindexes = single_class_nms(class_boxes, class_scores, thresh)
+        global_index_map = torch.nonzero(class_mask).squeeze(-1)
+        fin.append(global_index_map[class_subindexes])
+    return torch.cat(fin)
 
 def offset_mc_nms(boxes : torch.Tensor, classes : torch.Tensor, scores : torch.Tensor, thresh : float) -> torch.Tensor:
+    classes = (classes * 10000).unsqueeze(1) # (B, 1)
+    offset_boxes = boxes + classes # (B, 4) + (B, 1)
+    return single_class_nms(offset_boxes, scores, thresh)
+
+def normalize(x : torch.Tensor, y : torch.Tensor, xmax : torch.Tensor, ymax : torch.Tensor):
     pass
-
-def test_box_conversion():
-    xmin = torch.rand(100)
-    ymin = torch.rand(100)
-    xmax = xmin + torch.rand(100)
-    ymax = ymin + torch.rand(100)
-    boxes = torch.stack([xmin, ymin, xmax, ymax], dim=-1)
-    assert torch.allclose(boxes,box_cxcywh_to_xyxy(box_xyxy_to_cxcywh(boxes)))
-
-def test_intersection():
-    box2 = torch.tensor([0., 0., 10., 10.])
-    box1 = torch.tensor([5., 5., 15., 15.])
-    print(intersection_area(box1, box2))
-
-
-    box3 = torch.tensor([0., 0., 10., 10.])
-    box4 = torch.tensor([20., 20., 30., 30.])
-    print(intersection_area(box3, box4))
-
-
-
 
 
 if __name__ == "__main__":
@@ -123,6 +88,7 @@ if __name__ == "__main__":
     ymax = ymin + torch.rand(100)
     boxes = torch.stack([xmin, ymin, xmax, ymax], dim=-1)
     scores = torch.tensor([torch.randn(size=(1,)) for _ in range(100)])
+    
     single_class_nms(boxes=boxes, scores=scores, thresh=0.5)
 
 
