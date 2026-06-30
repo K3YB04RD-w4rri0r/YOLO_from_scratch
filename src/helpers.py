@@ -49,14 +49,12 @@ def IoU(b1 : torch.Tensor, b2 : torch.Tensor):
 
 def single_class_nms(boxes : torch.Tensor, scores : torch.Tensor, thresh : float) -> torch.Tensor:
     order = torch.argsort(scores, descending=True)
-    out = []
-    while order.numel() > 0: # same as len since order (B,)
-        best_box = boxes[order[0]]
-        out.append(best_box)
-        survivors_mask = IoU(best_box, boxes[order]) < thresh
-        order = order[survivors_mask]
+    fin = []
+    while order.numel() > 0:
+        fin.append(order[0].item())
+        order = order[IoU(boxes[order[0]], boxes[order]) <  thresh]
+    return torch.tensor(fin)
 
-    return torch.stack(out)
 
 
 def multiple_class_nms(boxes : torch.Tensor, classes : torch.Tensor, scores : torch.Tensor, thresh : float) -> torch.Tensor:
